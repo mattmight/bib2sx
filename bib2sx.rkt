@@ -60,6 +60,22 @@
   (string->symbol (string-downcase (symbol->string s))))
 
 
+;; Lexical analysis of BibTeX
+
+; Most of the complexity in analyzing BibTeX has bene
+; pushed into the lexer.  The lexer may recognize the same
+; token different depending on the context.
+
+; The lexer tracks whether it is inside quotes (") and
+; how many layers of {}-nesting it is within.
+
+; At two layers of {}-nesting, most tokens are treated as
+; strings and whitespace becomes a string as well.
+
+; At one layer of {}-nesting and between quotes ("),
+; most tokens are strings and whitespace becomes a string
+; as well.
+
 
 ; Token types:
 (define-empty-tokens PUNCT (@ |{| |}| |"| |#| |,| =))
@@ -89,6 +105,7 @@
     (bibtex-lexer port nesting (not in-quotes?)))
   
   (define (not-quotable?) 
+    ; iff not inside a string context
     (and (not in-quotes?) (< nesting 2)))
   
   {(lexer
@@ -179,8 +196,7 @@
    port})
 
 
-
-
+; generator-token-generator : port -> (-> token)
 (define (generate-token-generator port)
   (define tokens (bibtex-lexer port))
   (λ ()
@@ -191,9 +207,13 @@
           (set! tokens (stream-rest tokens))
           tok))))
 
-  
-(define (flatten-top-level-quotes value)
-  (match value
+
+;; Parsing BibTeX
+
+; flatten-top-level-quotes : expr* -> expr*
+(define (flatten-top-level-quotes exprs)
+  ; removes the top level {}-quotes because these
+  ; should not influence formatting.
     ['()
      '()]
     
@@ -203,7 +223,6 @@
     [(cons hd tl)
      (cons hd (flatten-top-level-quotes tl))]))
 
-(define (simplify-quotes value)
   (match value
     ['()
      '()]
@@ -372,6 +391,9 @@
       "}\n")]))
 
 
+;; Converting to a scriblib/bibtex-style raw hash:
+
+
 (define (item->hash item)
   (match item 
     [`(,item-type ,key (,names . ,exprs) ...)
@@ -444,7 +466,7 @@
 (match bibtex-output-format
   ['ast     (pretty-write bibtex-ast)]
   ['bib     (for ([item bibtex-ast])
-              (display (bibtex-item->string item))
+              (display (bibtex-item->bibstring item))
               (newline) (newline))]
   ['hash    (error "--hash not yet implemented")])
   
