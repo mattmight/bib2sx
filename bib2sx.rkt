@@ -80,8 +80,7 @@
 (define-empty-tokens PUNCT (@ |{| |}| |"| |#| |,| =))
 (define-empty-tokens EOF (EOF))
 
-(define-tokens WHITESPACE (SPACE))
-(define-tokens EXPR (ID STRING))
+(define-tokens EXPR (ID STRING SPACE))
 
 
 
@@ -284,7 +283,7 @@
              [{}                 '()])]
               
    
-   [tokens PUNCT EOF WHITESPACE EXPR]
+   [tokens PUNCT EOF EXPR]
    
    [start itemlist]
    
