@@ -87,6 +87,12 @@
 (define-lex-abbrev bibtex-id 
   (:+ (char-complement (char-set " \t\r\n{}@#,\\\""))))
 
+(define-lex-abbrev bibtex-comment
+  (:: (or #\c #\C) (or #\o #\O) (or #\m #\M) (or #\m #\M) (or #\e #\E) (or #\n #\N) (or #\t #\T)))
+
+(define-lex-abbrev bibtex-preamble
+  (:: (or #\p #\P) (or #\r #\R) (or #\e #\E) (or #\a #\A) (or #\m #\M) (or #\b #\B) (or #\l #\L) (or #\e #\E)))
+
 
 (define (bibtex-lexer port [nesting 0] [in-quotes? #f])
   
