@@ -208,12 +208,14 @@
           tok))))
 
 
+
 ;; Parsing BibTeX
 
 ; flatten-top-level-quotes : expr* -> expr*
 (define (flatten-top-level-quotes exprs)
   ; removes the top level {}-quotes because these
   ; should not influence formatting.
+  (match exprs
     ['()
      '()]
     
@@ -223,7 +225,10 @@
     [(cons hd tl)
      (cons hd (flatten-top-level-quotes tl))]))
 
-  (match value
+; simplify-quotes : expr* -> expr*
+(define (simplify-quotes exprs)
+  ; concatenates and simplifies where possible
+  (match exprs
     ['()
      '()]
     
@@ -240,11 +245,12 @@
     [(cons hd tl)
      (cons hd (simplify-quotes tl))]))
 
+; flatten+simplify : expr* -> expr*
+(define (flatten+simplify exprs)
+  (simplify-quotes (flatten-top-level-quotes exprs)))
 
-(define (flatten+simplify value)
-  (simplify-quotes (flatten-top-level-quotes value)))
 
-
+; bibtex-parse : (-> token) -> bibtex-ast
 (define bibtex-parse
   (parser
    [grammar 
@@ -290,12 +296,7 @@
                            tok-ok? tok-name tok-value)))]))
    
 
-#;(define (stream-take s i)
-  (if (<= i 0)
-      '()
-      (cons (stream-first s)
-            (stream-take (stream-rest s) (- i 1)))))
-
+;; BibTeX formatting
 
 (define bibtex-default-strings
   #hasheq((jan . ("January"))
@@ -312,6 +313,9 @@
           (dec . ("December"))))
 
 
+;; Inlining @string values into entries
+
+; bibtex-inline-strings : bibtex-ast -> bibtex-ast
 (define (bibtex-inline-strings
          items 
          [env bibtex-default-strings])
@@ -351,6 +355,8 @@
     ))
      
 
+;; Compiling back to .bib
+
 (define (bibtex-exprs->string exprs)
   
   (match exprs
@@ -380,7 +386,7 @@
 
 
 
-(define (bibtex-item->string item)
+(define (bibtex-item->bibstring item)
   (match item
     [`(,item-type ,key (,names . ,exprs) ...)
      (string-append
@@ -389,6 +395,19 @@
                                       [e exprs])
                              (format "  ~a = ~a ,\n" n (bibtex-exprs->string e))))
       "}\n")]))
+
+
+
+;; Converting to JSON:
+
+(define (bibtex-item->json item)
+  (match item
+    [`(,item-type ,key (,names . ,exprs) ...)
+     (string-append
+      "{" 
+      
+      "}")]))
+
 
 
 ;; Converting to a scriblib/bibtex-style raw hash:
@@ -403,14 +422,15 @@
      
 
 
+;; Handling command line options:
 
 
+; <config>
 (define bibtex-input-port (current-input-port))
 (define bibtex-output-format 'ast)
-
 (define inline? #f)
-
 (define lex-only? #f)
+; </config>
 
 (define (parse-options! args)
   (match args
@@ -430,15 +450,19 @@
     [(cons "--inline" rest)
      (set! inline? #t)
      (parse-options! rest)]
-        
+    
+    
+    ; convert to a #hash:    
     [(cons "--hash" rest)
      (set! bibtex-output-format 'hash)
      (parse-options! rest)]
     
+    ; convert to a bibtex .bib file:
     [(cons "--bib" rest)
      (set! bibtex-output-format 'bib)
      (parse-options! rest)]
     
+    ; provide a filename to parse:
     [(cons filename rest)
      (set! bibtex-input-port (open-input-file filename))
      (parse-options! rest)]
@@ -448,6 +472,7 @@
 (parse-options! (vector->list (current-command-line-arguments)))
     
 
+; for debugging, allow looking at the lexical analyzers output:
 (when lex-only?
   (define tokens (bibtex-lexer bibtex-input-port))
   (pretty-write (stream->list tokens))
@@ -455,7 +480,6 @@
 
 
 (define token-generator (generate-token-generator bibtex-input-port))
-
 
 (define bibtex-ast (bibtex-parse token-generator))
 
