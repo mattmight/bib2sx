@@ -22,8 +22,7 @@
 
 ; + Define input grammar
 ; + Add flag (--hash) output #hash instead of AST
-; + Add special handling for month codes
-
+; + Add README
 
 ; Output bibtex AST grammar:
 
