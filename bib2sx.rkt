@@ -25,7 +25,7 @@
 ; TODO:
 
 ; + Add README.md
-; + Extract input grammar.
+; + Extract input grammar
 ; + Add flag (--hash) output #hash instead of AST
 ; + Add support for @comment and @preamble
 
@@ -400,13 +400,56 @@
 
 ;; Converting to JSON:
 
+(define (bibtex-ast->json items)
+  (string-join (map bibtex-item->json items) ",\n"
+               #:before-first "[\n"
+               #:after-last "\n]\n"))
+
 (define (bibtex-item->json item)
+  
+  (define (escape str)
+    (when (symbol? str)
+      (set! str (symbol->string str)))
+    (set! str (string-replace str "\\" "\\\\"))
+    (set! str (string-replace str "\r" "\\r"))
+    (set! str (string-replace str "\n" "\\n"))
+    (set! str (string-replace str "\t" "\\t"))
+    (set! str (string-replace str "\"" "\\\""))
+    (set! str (string-replace str "\'" "\\\'"))
+    (string-append "\"" str "\""))
+  
+  (define (expr->json expr)
+    (match expr
+      [(? symbol?)
+       (escape (car (hash-ref bibtex-default-strings expr (λ () (list "")))))]
+      
+      [`(quote (,exprs ...))
+       (string-append "[" (string-join (map expr->json exprs) ", ") "]")]
+      
+      [`(quote ,expr)
+       (string-append "[" (expr->json expr) "]")]
+      
+      [(? string?)
+       (escape expr)]
+      
+      [else 
+       (error (format "no rule for expr->json: ~a" expr))]))
+    
   (match item
     [`(,item-type ,key (,names . ,exprs) ...)
+     
+     
+     (define entries
+       (for/list ([n names] [e exprs])
+         (format "~a: ~a" 
+                 (escape n) 
+                 (string-append "[" (string-join (map expr->json e) ",") "]"))))
+     
      (string-append
       "{" 
-      
-      "}")]))
+      (string-join entries ",\n " #:before-first " " #:after-last ",\n ")
+      "\"bibtexKey\": " (escape key)
+      " }")]))
 
 
 
@@ -462,6 +505,11 @@
      (set! bibtex-output-format 'bib)
      (parse-options! rest)]
     
+    ; convert to JSON:
+    [(cons "--json" rest)
+     (set! bibtex-output-format 'json)
+     (parse-options! rest)]
+    
     ; provide a filename to parse:
     [(cons filename rest)
      (set! bibtex-input-port (open-input-file filename))
@@ -492,6 +540,7 @@
   ['bib     (for ([item bibtex-ast])
               (display (bibtex-item->bibstring item))
               (newline) (newline))]
+  ['json    (display (bibtex-ast->json bibtex-ast))]
   ['hash    (error "--hash not yet implemented")])
   
 
