@@ -336,8 +336,8 @@
   
   (match exprs
     
-    [(list (or 'jan 'feb 'mar 'apr 'may 'jun 'jul 'aug 'sep 'oct 'nov 'dec))
-     (symbol->string (car exprs))]
+    [(list (and sym (? symbol?)))
+     (symbol->string sym)]
     
     [else
      ;=>
