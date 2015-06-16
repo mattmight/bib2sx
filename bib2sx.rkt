@@ -18,11 +18,17 @@
 ; You should have received a copy of the GNU General Public License
 ; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+; ISSUES:
+
+; + Does not support @comment or @preamble
+
 ; TODO:
 
-; + Define input grammar
+; + Add README.md
+; + Extract input grammar.
 ; + Add flag (--hash) output #hash instead of AST
-; + Add README
+; + Add support for @comment and @preamble
+
 
 ; Output bibtex AST grammar:
 
