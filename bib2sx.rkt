@@ -135,7 +135,7 @@
                     (lex input-port))])]
    
    ["\\"
-    (stream-cons (token-STRING "{")
+    (stream-cons (token-STRING "\\")
                  (lex input-port))]
    
    ["\\{"
