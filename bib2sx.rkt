@@ -26,7 +26,6 @@
 
 ; + Add README.md
 ; + Extract input grammar
-; + Add flag (--hash) output #hash instead of AST
 ; + Add support for @comment and @preamble
 
 
@@ -453,17 +452,6 @@
 
 
 
-;; Converting to a scriblib/bibtex-style raw hash:
-
-
-(define (item->hash item)
-  (match item 
-    [`(,item-type ,key (,names . ,exprs) ...)
-     ; TODO: make 'type and 'key fields
-     ; turn all other n ames to strings
-     (error "not finished")]))
-     
-
 
 ;; Handling command line options:
 
@@ -492,12 +480,6 @@
     ; inline all @string declarations:
     [(cons "--inline" rest)
      (set! inline? #t)
-     (parse-options! rest)]
-    
-    
-    ; convert to a #hash:    
-    [(cons "--hash" rest)
-     (set! bibtex-output-format 'hash)
      (parse-options! rest)]
     
     ; convert to a bibtex .bib file:
@@ -540,13 +522,6 @@
   ['bib     (for ([item bibtex-ast])
               (display (bibtex-item->bibstring item))
               (newline) (newline))]
-  ['json    (display (bibtex-ast->json bibtex-ast))]
-  ['hash    (error "--hash not yet implemented")])
+  ['json    (display (bibtex-ast->json bibtex-ast))])
   
-
-; (require (prefix-in scribble- scriblib/bibtex))
-
-;(define raw (scribble-bibdb-raw (scribble-bibtex-parse (open-input-file "mattmight.bib"))))
-
-
     
