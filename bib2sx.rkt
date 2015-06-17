@@ -98,16 +98,20 @@
 
 (define (bibtex-lexer port [nesting 0] [in-quotes? #f])
   
+  ; helpers to recursively call the lexer with defaults:
   (define (lex port) 
     (bibtex-lexer port nesting in-quotes?))
   
   (define (lex+1 port) 
+    ; increase {}-nesting
     (bibtex-lexer port (+ nesting 1) in-quotes?))
   
   (define (lex-1 port) 
+    ; increase {}-nesting
     (bibtex-lexer port (- nesting 1) in-quotes?))
   
   (define (lex-quotes port)
+    ; toggle inside quotes
     (bibtex-lexer port nesting (not in-quotes?)))
   
   (define (not-quotable?) 
@@ -192,7 +196,9 @@
                        (lex-1 input-port)
                        (if (= (string-length lexeme) 1)
                            (lex-1 input-port)
-                           (stream-cons (token-SPACE (substring lexeme 0 (- (string-length lexeme) 1)))
+                           (stream-cons (token-SPACE (substring 
+                                                      lexeme 0 
+                                                      (- (string-length lexeme) 1)))
                                         (lex-1 input-port))))))]
    
    [(:+ numeric)
@@ -200,7 +206,9 @@
                  (lex input-port))]
    
    [bibtex-id
-    (stream-cons (if (not-quotable?) (token-ID (string->symbol lexeme)) (token-STRING lexeme))
+    (stream-cons (if (not-quotable?)
+                     (token-ID (string->symbol lexeme)) 
+                     (token-STRING lexeme))
                  (lex input-port))])
    
    port})
