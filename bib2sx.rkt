@@ -24,8 +24,7 @@
 
 ; TODO:
 
-; + Add README.md
-; + Extract input grammar
+; + Add --parse-names to extract sructure from author, editor, etc.
 ; + Add support for @comment and @preamble
 
 
