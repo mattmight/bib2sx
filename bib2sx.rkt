@@ -193,6 +193,10 @@
                            (stream-cons (token-SPACE (substring lexeme 0 (- (string-length lexeme) 1)))
                                         (lex-1 input-port))))))]
    
+   [(:+ numeric)
+    (stream-cons (token-STRING lexeme)
+                 (lex input-port))]
+   
    [bibtex-id
     (stream-cons (if (not-quotable?) (token-ID (string->symbol lexeme)) (token-STRING lexeme))
                  (lex input-port))])
