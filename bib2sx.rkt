@@ -421,6 +421,10 @@
         
         [`(quote ,(? string?))   e]
         
+        [`(quote (quote . ,body))
+         `(quote ,@(exprs->xexpr 
+                    (list `(quote . ,body))))]
+        
         [`(quote (,exprs ...))
          `(quote ,@(exprs->xexpr exprs))])))
          
