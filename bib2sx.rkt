@@ -35,7 +35,8 @@
 
 ; <item> ::= (<item-type> <id> <attr> ...)
 
-; <attr> ::= (<name> <expr> ...)
+; <attr> ::= (<name> <expr> ...)  ;
+;         |  (<name> . <string>)  ; if --flatten
 
 ; <expr> ::= <string>
 ;         |  '<expr>
@@ -374,32 +375,41 @@
 
 ;; Compiling back to .bib
 
-(define (bibtex-exprs->string exprs)
+(define (bibtex-exprs->bibstring exprs)
+
+  (define (escape str)
+    (set! str (string-replace str "{" "\\{"))
+    (set! str (string-replace str "}" "\\}"))
+    str)
   
   (match exprs
+    
+    [(? string?)
+     exprs]
     
     [(list (and sym (? symbol?)))
      (symbol->string sym)]
     
     [else
      ;=>
-     (define (escape str)
-       (set! str (string-replace str "{" "\\{"))
-       (set! str (string-replace str "}" "\\}"))
-       str)
      
      (define (expr->string-list expr)
        (match expr
          [(? string?)         (list (escape expr))]
-         [(? symbol?)         (list " } # " (symbol->string expr) " # { ")]
+         [(? symbol?)         (list "} # " (symbol->string expr) " # {")]
+         
+         [`(quote (quote . ,s))
+          `("{" ,@(expr->string-list `(quote . ,s)) "}")]
+         
          [`(quote ,(and s (? string?)))
           ; =>
           (list "{" s "}")]
+         
          [`(quote (,s ...))
           ; =>
-          (list "{" (bibtex-exprs->string s) "}")]))
+          `("{" ,@(apply append (map expr->string-list s)) "}")]))
      
-     (string-append "{ " (apply string-append (apply append (map expr->string-list exprs))) " }")]))
+     (string-append (apply string-append (apply append (map expr->string-list exprs))))]))
 
 
 
@@ -410,8 +420,24 @@
       "@" (symbol->string item-type) "{" (symbol->string key) ",\n"
       (apply string-append (for/list ([n names]
                                       [e exprs])
-                             (format "  ~a = ~a ,\n" n (bibtex-exprs->string e))))
+                             (format "  ~a = { ~a },\n" n (bibtex-exprs->bibstring e))))
       "}\n")]))
+
+
+;; Flattening:
+
+(define (bibtex-flatten-strings items)
+  
+  (define (flatten-item item)
+    (match item
+      [`(,item-type ,key (,names . ,exprs) ...)
+       `(,item-type ,key
+                    ,@(for/list ([n names]
+                                 [e exprs])
+                        (cons n (bibtex-exprs->bibstring e))))]))
+
+  (map flatten-item items))
+  
 
 
 ;; Converting to XML:
@@ -419,22 +445,24 @@
 (define (bibtex-ast->xml items)
   
   (define (exprs->xexpr exprs)
-    (for/list ([e exprs])
-      (match e
-        [(? symbol?)
-         (symbol->string e)]
-        
-        [(? string?)             e]
-        
-        [`(quote ,(? string?))   e]
-        
-        [`(quote (quote . ,body))
-         `(quote ,@(exprs->xexpr 
-                    (list `(quote . ,body))))]
-        
-        [`(quote (,exprs ...))
-         `(quote ,@(exprs->xexpr exprs))])))
-         
+    (if (string? exprs)
+        `(([value ,exprs]))
+        (for/list ([e exprs])
+          (match e
+            [(? symbol?)
+             (symbol->string e)]
+            
+            [(? string?)             e]
+            
+            [`(quote ,(? string?))   e]
+            
+            [`(quote (quote . ,body))
+             `(quote ,@(exprs->xexpr 
+                        (list `(quote . ,body))))]
+            
+            [`(quote (,exprs ...))
+             `(quote ,@(exprs->xexpr exprs))]))))
+    
   (define (item->xexpr item)
     (match item
       [`(,item-type ,key (,names . ,exprs) ...)
@@ -443,7 +471,7 @@
                                  [e exprs])
                         `(,n ,@(exprs->xexpr e))))]))
   
-  (xexpr->xml `(bibtex ,@(map item->xexpr items))))
+    (xexpr->xml `(bibtex ,@(map item->xexpr items))))
   
   
                         
@@ -495,7 +523,9 @@
        (for/list ([n names] [e exprs])
          (format "~a: ~a" 
                  (escape n) 
-                 (string-append "[" (string-join (map expr->json e) ",") "]"))))
+                 (if (string? e)
+                     (escape e)
+                     (string-append "[" (string-join (map expr->json e) ",") "]")))))
      
      (string-append
       "{" 
@@ -513,8 +543,10 @@
 (define bibtex-input-port (current-input-port))
 (define bibtex-output-format 'ast)
 (define inline? #f)
+(define flatten? #f)
 (define lex-only? #f)
 ; </config>
+
 
 (define (parse-options! args)
   (match args
@@ -528,6 +560,11 @@
     ; just lexically analyze; don't parse:
     [(cons "--lex" rest)
      (set! lex-only? #t)
+     (parse-options! rest)]
+    
+    ; flatten values into a single string:
+    [(cons "--flatten" rest)
+     (set! flatten? #t)
      (parse-options! rest)]
     
     ; inline all @string declarations:
@@ -558,6 +595,12 @@
     
     ))
 
+
+
+
+; for testing in DrRacket:
+;(current-command-line-arguments #("--inline" "--flatten" "test/test.bib"))
+
 (parse-options! (vector->list (current-command-line-arguments)))
     
 
@@ -575,6 +618,8 @@
 (when inline?
   (set! bibtex-ast (bibtex-inline-strings bibtex-ast)))
 
+(when flatten?
+  (set! bibtex-ast (bibtex-flatten-strings bibtex-ast)))
 
 (match bibtex-output-format
   ['ast     (pretty-write bibtex-ast)]
