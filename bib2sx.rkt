@@ -52,6 +52,8 @@
 (require (prefix-in : parser-tools/lex-sre))
 (require parser-tools/yacc)
 
+(require xml)
+(require xml/xexpr)
 
 
 ; helpers:
@@ -405,6 +407,37 @@
       "}\n")]))
 
 
+;; Converting to XML:
+
+(define (bibtex-ast->xml items)
+  
+  (define (exprs->xexpr exprs)
+    (for/list ([e exprs])
+      (match e
+        [(? symbol?)
+         (symbol->string e)]
+        
+        [(? string?)             e]
+        
+        [`(quote ,(? string?))   e]
+        
+        [`(quote (,exprs ...))
+         `(quote ,@(exprs->xexpr exprs))])))
+         
+  (define (item->xexpr item)
+    (match item
+      [`(,item-type ,key (,names . ,exprs) ...)
+       `(,item-type (bibtex-key ,(symbol->string key))
+                    ,@(for/list ([n names]
+                                 [e exprs])
+                        `(,n ,@(exprs->xexpr e))))]))
+  
+  (xexpr->xml `(bibtex ,@(map item->xexpr items))))
+  
+  
+                        
+       
+
 
 ;; Converting to JSON:
 
@@ -501,6 +534,12 @@
      (set! bibtex-output-format 'json)
      (parse-options! rest)]
     
+    ; convert to JSON:
+    [(cons "--xml" rest)
+     (set! bibtex-output-format 'xml)
+     (parse-options! rest)]
+        
+    
     ; provide a filename to parse:
     [(cons filename rest)
      (set! bibtex-input-port (open-input-file filename))
@@ -531,6 +570,8 @@
   ['bib     (for ([item bibtex-ast])
               (display (bibtex-item->bibstring item))
               (newline) (newline))]
+  ['xml     (let ([xml (bibtex-ast->xml bibtex-ast)])
+              (display-xml/content xml))]
   ['json    (display (bibtex-ast->json bibtex-ast))])
   
     
