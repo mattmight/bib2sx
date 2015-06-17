@@ -275,7 +275,6 @@
     (itemlist [{item itemlist}  (cons $1 $2)]
               [{}               '()]
               
-              ; TODO: Ignore all non-@ items:
               [{ID   itemlist}  $2]
               [{|,|  itemlist}  $2])
     
