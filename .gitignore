@@ -1,4 +1,6 @@
 *.bib
 test/
 bib2sx
+bibtex/compiled/
+
 
