@@ -264,6 +264,64 @@
      [error (lambda (tok-ok? tok-name tok-value)
               (error (format "parsing error: ~a ~a ~a"
                              tok-ok? tok-name tok-value)))]))
+
+  
+  ;; Name splitting
+    
+  (define (bibtex-split-name exprs)
+    
+    (define (tokenize-parts expr)
+      (match expr
+        [(? string?)
+         (define parts 
+           (add-between (regexp-split #rx"," expr) ","))
+         (apply append (for/list ([p parts]) 
+                         (filter (λ (s) (not (equal? s "")))
+                                 (regexp-split #rx"[ \t\r\n]+" 
+                                               (string-trim p)))))]
+        
+        [(? symbol?)
+         '("")]
+        
+        [`(quote ,value)
+         (list expr)]
+      
+        [else (error (format "could not tokenize name part ~v" expr))]))
+    
+    (define tokens (apply append (map tokenize-parts exprs)))
+    
+    (define (von? str)
+      (and (string? str) (match (string->list str)
+                           ['() #f]
+                           [(cons char _) (char-lower-case? char)])))
+    
+    (define (name? str)
+      (or (list? str) 
+          (and (string? str)
+               (match (string->list str)
+                 ['() #t]
+                 [(cons char _) (char-upper-case? char)]))))
+    
+    
+    (match tokens
+      [(list (and von (? von?)) ...
+             last-name ..1
+             ","
+             jr ...
+             ","
+             first-name ...)
+       (list first-name von last-name jr)]
+      
+      [(list (and von (? von?)) ...
+             last-name ..1
+             ","
+             first-name ...)
+       (list first-name von last-name '())]
+      
+      [(list (and first-name (? name?)) ...
+             (and von (? von?)) ...
+             (and last-name (? name?)) ...)
+       (list first-name von last-name '())]))
   
   
   ;; BibTeX formatting
