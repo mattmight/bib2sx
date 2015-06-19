@@ -5,7 +5,7 @@ BibTeX files (by default) into S-Expressions.
 
 It also supports outputing to JSON, XML and (canonicalized) BibTeX.
  
-A [blog post explaining bib2sx](matt.might.net/articles/parsing-bibtex/)
+A [blog post explaining bib2sx](http://matt.might.net/articles/parsing-bibtex/)
 covers the tool in much more detail.
 
 
