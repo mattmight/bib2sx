@@ -37,7 +37,7 @@
   
   
   (define-lex-abbrev bibtex-id 
-    (:+ (char-complement (char-set " \t\r\n{}@#,\\\""))))
+    (:+ (char-complement (char-set " \t\r\n{}@#=,\\\""))))
   
   (define-lex-abbrev bibtex-comment
     (:: (or #\c #\C) (or #\o #\O) (or #\m #\M) (or #\m #\M) (or #\e #\E) (or #\n #\N) (or #\t #\T)))
