@@ -12,7 +12,8 @@ covers the tool in much more detail.
 
 ## Building
 
-To build `bib2sx`, run `make`.
+To build `bib2sx`, run `make`. 
+You will need an installation of the [Racket programming language](http://racket-lang.org/download/). 
 
 
 
