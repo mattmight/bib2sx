@@ -1,7 +1,7 @@
 # bib2sx
 
-`bib2sx` is a command-line tool for parsing BibTeX files (by default) into
-S-Expressions.
+`bib2sx` is a command-line tool (written in Racket) for parsing 
+BibTeX files (by default) into S-Expressions.
 
 It also supports outputing to JSON, XML and (canonicalized) BibTeX.
  
@@ -9,12 +9,14 @@ A [blog post explaining bib2sx](matt.might.net/articles/parsing-bibtex/)
 covers the tool in much more detail.
 
 
+## Dependencies
+
+You will need an installation of the [Racket programming language](http://racket-lang.org/download/). 
+
 
 ## Building
 
 To build `bib2sx`, run `make`. 
-You will need an installation of the [Racket programming language](http://racket-lang.org/download/). 
-
 
 
 ## Installation
