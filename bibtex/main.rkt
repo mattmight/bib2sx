@@ -319,9 +319,6 @@
     (define (space? str)
       (equal? str " "))
     
-    (define (not-comma? str)
-      (not (comma? str)))
-    
     (define (comma? str)
       (equal? str ","))
     
@@ -329,28 +326,23 @@
       (not (space? str)))
     
     (define (von? str)
-      ; TODO: true if {\command}
-      (and (string? str) 
-           (match (string->list str)
-             ['() #f]
-             ['(#\,) #f]
-             [(cons char _) 
-              (char-lower-case? char)])))
+      (or (and (list? str)
+               (match str
+                 [`(quote ,(and s (? string?)))
+                  (match (string->list s)
+                    [(cons #\\ _) #t]
+                    [else #f])]))
+                  
+          (and (string? str) 
+               (match (string->list str)
+                 ['() #f]
+                 ['(#\,) #f]
+                 [(cons char _) 
+                  (char-lower-case? char)]))))
     
     (define (not-von? str)
       (not (von? str)))
       
-    
-    (define (name? str)
-      (or (list? str) ; TODO: false if {\command}
-          (and (string? str)
-               (match (string->list str)
-                 ['() #t]
-                 ['(#\,) #f]
-                 [(cons char _) 
-                  (char-upper-case? char)]))))
-    
-    
     (define (trim-start lst)
       (match lst
         [(list (? space?) ... term ...)
@@ -358,8 +350,6 @@
     
     (define (trim lst)
       (trim-start (reverse (trim-start (reverse lst)))))
-    
-    
     
     (define (parse-von-last parts)
       (match (reverse parts)
@@ -395,7 +385,6 @@
          `(,first-name ,@(parse-von-last von-last) ())]))
       
     
-    
     (define parsed 
       (match (bibtex-split-tokens tokens comma?)
         
@@ -409,7 +398,14 @@
         
         [else tokens]))
     
-    (map trim parsed))
+    (match (map trim parsed)
+      [`(,first ,von ,last ,jr)
+       `(name
+         (first . ,first)
+         (von . ,von)
+         (last . ,last)
+         (jr . ,jr))]))
+       
   
   
   (define (bibtex-parse-names item [name-fields (set 'author 'editor)])
@@ -427,8 +423,7 @@
                    (define (is-and? expr) (equal? expr "and"))
                    (define toks (bibtex-tokenize e))
                    (define all-names (bibtex-split-tokens toks is-and?))
-                   (newline)
-                   (list n (apply vector (map bibtex-parse-name all-names))))
+                   (cons n (map bibtex-parse-name all-names)))
                  (cons n e))))]))
             
   
@@ -495,13 +490,55 @@
   
   (define (bibtex-exprs->bibstring exprs)
     
+    (define (name->bibstring name)
+      (match name
+        [`(name (first . ,first) (von . ,von) (last . ,last) (jr))
+         (string-append (bibtex-exprs->bibstring von)
+                        (if (null? von) "" " ")
+                        (bibtex-exprs->bibstring last)
+                        ", "
+                        (bibtex-exprs->bibstring first))]
+        
+        
+        [`(name (first . ,first) (von . ,von) (last . ,last) (jr . ,jr))
+         (string-append (bibtex-exprs->bibstring von)
+                        (if (null? von) "" " ")
+                        (bibtex-exprs->bibstring last)
+                        ", "
+                        (bibtex-exprs->bibstring jr)
+                        ", "
+                        (bibtex-exprs->bibstring first))]
+        [else (error (format "unrecognized name format: ~v" name))]))
+    
+    (define (expr->string-list expr)
+      (match expr
+        [(? string?)         (list (escape expr))]
+        [(? symbol?)         (list "} # " (symbol->string expr) " # {")]
+        
+        [`(quote (quote . ,s))
+         `("{" ,@(expr->string-list `(quote . ,s)) "}")]
+        
+        [`(quote ,(and s (? string?)))
+         ; =>
+         (list "{" s "}")]
+        
+        [`(quote (,s ...))
+         ; =>
+         `("{" ,@(apply append (map expr->string-list s)) "}")]
+        
+        [else (error (format "unrecognize expr: ~v" expr))]))
+    
     (define (escape str)
       (set! str (string-replace str "{" "\\{"))
       (set! str (string-replace str "}" "\\}"))
       str)
     
     (match exprs
-      
+      ; list of names:
+      [(cons `(name . ,_) _)
+       (string-join (map name->bibstring exprs) " and ")]
+              
+      ; already flattened:
       [(? string?)
        exprs]
       
@@ -510,24 +547,7 @@
       
       [else
        ;=>
-       
-       (define (expr->string-list expr)
-         (match expr
-           [(? string?)         (list (escape expr))]
-           [(? symbol?)         (list "} # " (symbol->string expr) " # {")]
-           
-           [`(quote (quote . ,s))
-            `("{" ,@(expr->string-list `(quote . ,s)) "}")]
-           
-           [`(quote ,(and s (? string?)))
-            ; =>
-            (list "{" s "}")]
-           
-           [`(quote (,s ...))
-            ; =>
-            `("{" ,@(apply append (map expr->string-list s)) "}")]))
-       
-       (string-append (apply string-append (apply append (map expr->string-list exprs))))]))
+       (apply string-append (apply append (map expr->string-list exprs)))]))
   
   
   
@@ -571,6 +591,10 @@
                (symbol->string e)]
               
               [(? string?)             e]
+              
+              [`(name . ,_)
+               e]
+               
               
               [`(quote ,(? string?))   e]
               
@@ -620,6 +644,12 @@
       (match expr
         [(? symbol?)
          (escape (car (hash-ref bibtex-default-strings expr (λ () (list "")))))]
+        
+        [`(name (first . ,first) (von . ,von) (last . ,last) (jr . ,jr))
+         (string-append "{first: [" (string-join (map expr->json first) ",") "],"
+                        "von: [" (string-join (map expr->json von) ",") "],"
+                        "last: [" (string-join (map expr->json last) ",") "],"
+                        "jr: [" (string-join (map expr->json jr) ",") "]}")]
         
         [`(quote (,exprs ...))
          (string-append "[" (string-join (map expr->json exprs) ", ") "]")]

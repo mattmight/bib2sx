@@ -24,8 +24,7 @@
 
 ; TODO:
 
-; + Add flag to choose name fields
-; + Add support for handling parsed name fields to JSON, XML, BibTeX
+; + Add flag to choose name fields (currently author, editor)
 ; + Add support for @comment and @preamble
 
 
@@ -35,15 +34,19 @@
 
 ; <item> ::= (<item-type> <id> <attr> ...)
 
-; <attr> ::= (<name> <expr> ...)  ;
-;         |  (<name> . <string>)  ; if --flatten
+; <attr> ::= (<id> <expr> ...)  ;
+;         |  (<id> . <string>)  ; if --flatten
+;         |  (<id> <name> ...)  ; if --parse-names
 
 ; <expr> ::= <string>
 ;         |  '<expr>
 ;         |  '(<expr> ...)
 ;         |  <id>
 
-; <name> ::= <id>
+; <name> ::= (name (first <expr> ...) ; if --parse-names
+;                  (von <expr> ...)
+;                  (last <expr> ...) 
+;                  (jr <expr>))
 
 ; <item-type> ::= inproceedings | article | ...
 
@@ -59,7 +62,8 @@
 
 ; <config>
 (define bibtex-input-port (current-input-port))
-(define bibtex-output-format 'ast)
+(define bibtex-output-format 'sx)
+(define bibtex-input-format 'bib)
 (define inline? #f)
 (define flatten? #f)
 (define lex-only? #f)
@@ -74,6 +78,16 @@
     
     [(cons "--drracket" rest)
      (set! bibtex-input-port (open-input-file "mattmight.bib"))
+     (parse-options! rest)]
+    
+    ; choose the input format:
+    [`("--in" ,format . ,rest)
+     (set! bibtex-input-format (string->symbol format))
+     (parse-options! rest)]
+    
+    ; choose the output format:
+    [`("--out" ,format . ,rest)
+     (set! bibtex-output-format (string->symbol format))
      (parse-options! rest)]
     
     ; just lexically analyze; don't parse:
@@ -135,26 +149,37 @@
   (exit))
 
 
-(define token-generator (generate-token-generator bibtex-input-port))
 
-(define bibtex-ast (bibtex-parse token-generator))
+(define bibtex-ast 
+  (match bibtex-input-format
+    ['bib   
+     (define token-generator (generate-token-generator bibtex-input-port))
+     (bibtex-parse token-generator)]
+    
+    ['sx   
+     (read bibtex-input-port)]
+    
+    [else 
+     (error (format "unrecognized input format: ~a" bibtex-input-format))]))
 
 (when inline?
   (set! bibtex-ast (bibtex-inline-strings bibtex-ast)))
 
-(when flatten?
-  (set! bibtex-ast (bibtex-flatten-strings bibtex-ast)))
-
 (when parse-names?
   (set! bibtex-ast (map bibtex-parse-names bibtex-ast)))
 
+(when flatten?
+  (set! bibtex-ast (bibtex-flatten-strings bibtex-ast)))
+
 (match bibtex-output-format
-  ['ast     (pretty-write bibtex-ast)]
+  ['sx      (pretty-write bibtex-ast)]
   ['bib     (for ([item bibtex-ast])
               (display (bibtex-item->bibstring item))
               (newline) (newline))]
   ['xml     (let ([xml (bibtex-ast->xml bibtex-ast)])
               (display-xml/content xml))]
-  ['json    (display (bibtex-ast->json bibtex-ast))])
+  ['json    (display (bibtex-ast->json bibtex-ast))]
+  [else     (error (format "unrecognized output format: ~a" 
+                           bibtex-output-format))])
   
     
