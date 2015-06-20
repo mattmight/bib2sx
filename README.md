@@ -35,6 +35,7 @@ where:
 
  + `--inline` will expand variables into definitions from @string
  + `--flatten` will convert values into properly-quoted BibTeX strings
+ + `--parse-names` will parse names according to BibTeX's rules
  + `--json` will output JSON
  + `--bib` will output canonicalized BibTeX
  + `--xml` will output XML

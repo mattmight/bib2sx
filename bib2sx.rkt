@@ -24,7 +24,8 @@
 
 ; TODO:
 
-; + Add --parse-names to extract sructure from author, editor, etc.
+; + Add flag to choose name fields
+; + Add support for handling parsed name fields to JSON, XML, BibTeX
 ; + Add support for @comment and @preamble
 
 
@@ -62,6 +63,7 @@
 (define inline? #f)
 (define flatten? #f)
 (define lex-only? #f)
+(define parse-names? #f)
 ; </config>
 
 
@@ -82,6 +84,11 @@
     ; flatten values into a single string:
     [(cons "--flatten" rest)
      (set! flatten? #t)
+     (parse-options! rest)]
+    
+    ; parse names into a vector of vectors:
+    [(cons "--parse-names" rest)
+     (set! parse-names? #t)
      (parse-options! rest)]
     
     ; inline all @string declarations:
@@ -137,6 +144,9 @@
 
 (when flatten?
   (set! bibtex-ast (bibtex-flatten-strings bibtex-ast)))
+
+(when parse-names?
+  (set! bibtex-ast (map bibtex-parse-names bibtex-ast)))
 
 (match bibtex-output-format
   ['ast     (pretty-write bibtex-ast)]
