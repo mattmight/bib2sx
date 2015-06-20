@@ -35,7 +35,7 @@ To install to `~/bin/`, run `make install`.
 ## Usage
 
 ```
-$ bib2sx [ --inline ] [ --flatten ]
+$ bib2sx [ --inline ] [ --flatten ] [ --parse-names ]
          [ --in sx|bib ] [ --out sx|bib|json|xml ]
          [ --json | --bib | --xml ]
          [ <input-file> ]
