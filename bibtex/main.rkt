@@ -544,7 +544,7 @@
        exprs]
       
       [(list (and sym (? symbol?)))
-       (symbol->string sym)]
+       (string-append "} # " (symbol->string sym) " # {")]
       
       [else
        ;=>
@@ -559,7 +559,11 @@
         "@" (symbol->string item-type) "{" (symbol->string key) ",\n"
         (apply string-append (for/list ([n names]
                                         [e exprs])
-                               (format "  ~a = { ~a },\n" n (bibtex-exprs->bibstring e))))
+                               (match e
+                                 [(list (and sym (? symbol?)))
+                                  (format "  ~a = ~a,\n" n sym)]
+                                 [else
+                                  (format "  ~a = { ~a },\n" n (bibtex-exprs->bibstring e))])))
         "}\n")]))
   
   
