@@ -231,7 +231,8 @@
                 [{}               '()]
                 
                 [{ID   itemlist}  $2]
-                [{|,|  itemlist}  $2])
+                [{|,|  itemlist}  $2]
+                [{|#|  itemlist}  $2])
       
       (item [{|@| ID |{| taglist |}|} 
              ; =>
