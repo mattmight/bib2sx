@@ -202,6 +202,12 @@
       ['()
        '()]
 
+      [`(name (first . ,first) (von . ,von) (last . ,last) (jr . ,jr))
+       `(name (first . ,(bibtex-simplify-quotes first))
+              (von . ,(bibtex-simplify-quotes von))
+              (last . ,(bibtex-simplify-quotes last))
+              (jr . ,(bibtex-simplify-quotes jr)))]
+      
       [`((quote ,(? string? substring)) . ,tl)
        `((quote ,substring) . ,(bibtex-simplify-quotes tl))]
        
@@ -372,6 +378,12 @@
         [(? symbol?)
          (error (format "BibTeX symbols [~v] cannot be TeXinized; inline first" expr))]
 
+        [`(name (first . ,first) (von . ,von) (last . ,last) (jr . ,jr))
+         (list `(name (first . ,(bibtex-texenize first))
+                      (von . ,(bibtex-texenize von))
+                      (last . ,(bibtex-texenize last))
+                      (jr . ,(bibtex-texenize last))))]
+
         [`(quote ,(? string? str))
          (list `(quote ,(texinize str)))]
 
@@ -382,7 +394,15 @@
          (list `(quote ,(apply append (map texinize exprs))))]))
     
     (apply append (map texinize condensed-exprs)))
-       
+
+
+  (define (bibtex-texenize-item item)
+    (match item
+      [`(,item-type ,key (,names . ,exprss) ...)
+       ; =>
+       `(,item-type ,key ,(for/list ([name  names]
+                                     [exprs exprss])
+                            (cons name (bibtex-texenize exprs))))]))
 
   (define (bibtex-whitespace? expr)
     (and (string? expr)
@@ -577,10 +597,10 @@
     (match (map bibtex-trim parsed)
       [`(,first ,von ,last ,jr)
        `(name
-         (first . ,first)
-         (von . ,von)
-         (last . ,last)
-         (jr . ,jr))]))
+         (first . ,(bibtex-simplify-quotes first))
+         (von . ,(bibtex-simplify-quotes von))
+         (last . ,(bibtex-simplify-quotes last))
+         (jr . ,(bibtex-simplify-quotes jr)))]))
        
 
   
@@ -609,7 +629,6 @@
                       [e exprs])
              (if (set-member? name-fields n)
                  (let ()
-                   (define (is-and? expr) (equal? expr "and"))
                    (define toks (bibtex-texenize e))
                    (define all-names (split-ands toks)) 
                    (cons n (map bibtex-parse-name all-names)))

@@ -68,6 +68,7 @@
 (define bibtex-input-format 'bib)
 (define inline? #f)
 (define flatten? #f)
+(define texenize? #f)
 (define lex-only? #f)
 (define parse-names? #f)
 ; </config>
@@ -110,6 +111,13 @@
     ; inline all @string declarations:
     [(cons "--inline" rest)
      (set! inline? #t)
+     (parse-options! rest)]
+
+    ; tokenize strings into units meaningful to TeX:
+    [(cons "--texenize" rest)
+     ; useful if you want to render to a different output
+     ; format such as HTML, and you need ot interpret TeX
+     (set! texenize? #t)
      (parse-options! rest)]
     
     ; convert to a bibtex .bib file:
@@ -172,6 +180,9 @@
 
 (when flatten?
   (set! bibtex-ast (bibtex-flatten-strings bibtex-ast)))
+
+(when texenize?
+  (set! bibtex-ast (map bibtex-texenize-item bibtex-ast)))
 
 (match bibtex-output-format
   ['sx      (pretty-write bibtex-ast)]
