@@ -12,8 +12,8 @@ A [blog post explaining
 bib2sx](http://matt.might.net/articles/parsing-bibtex/) covers the tool in
 much more detail.
 
-By default, it will not parse names, but it will parse
-names into `first`, `von`, `last` and `jr` with `--parse-names`.
+It will parse name fields (`author`, `editor`) into `first`, `von`, `last`
+and `jr` with `--parse-names`.
 
 
 ## Dependencies
@@ -35,7 +35,7 @@ To install to `~/bin/`, run `make install`.
 ## Usage
 
 ```
-$ bib2sx [ --inline ] [ --flatten ] [ --parse-names ]
+$ bib2sx [ --inline ] [ --flatten ] [ --parse-names ] [ --texenize ]
          [ --in sx|bib ] [ --out sx|bib|json|xml ]
          [ --json | --bib | --xml ]
          [ <input-file> ]
@@ -46,6 +46,7 @@ where:
  + `--inline` will expand variables into definitions from @string
  + `--flatten` will convert values into properly-quoted BibTeX strings
  + `--parse-names` will parse names according to BibTeX's rules
+ + `--texenize` will tokenize values into lexemes meaningful to TeX
  + `--in <format>` will set the input format: `sx` or `bib` allowed; 
    `bib` is default
  + `--out <format>` will set the output format; `sx`, `bib`, `json`, or `xml`
@@ -53,6 +54,18 @@ where:
  + `--json` will output JSON; same as `--out json`
  + `--bib` will output canonicalized BibTeX; same as `--out bib`
  + `--xml` will output XML; same as `--out xml`
+
+
+## TeXenizing
+
+If you want to render the output in a format other than LaTeX (such as
+HTML), you will need to interpret the TeX.
+
+To make this easier, the `--texenize` flag will parse a value into lexemes
+meaningful to LaTeX.
+
+For instance, `\foo{bar}` will become `"\foo" '("b" "a" "r")`.
+
 
 
 ## License
