@@ -269,122 +269,279 @@
                              tok-ok? tok-name tok-value)))]))
 
   
-  ;; Name splitting
+  ;; Name parsing
+
+  (define (string-starts-with str prefix)
+    (define (prefixed? chars pre)
+      (match* {chars pre}
+        [{(cons a atl) (cons b btl)}
+         (and (equal? a b)
+              (prefixed? atl btl))]
+
+        [{_  '()}        #t]))
+
+    (prefixed? (string->list str) (string->list prefix)))
+         
+  
+  (define (string-tokenize str seps [include-seps? #f])
+
+    (define (is-sep? char)
+      (set-member? seps char))
+        
+    (define (chars->tokens chars [rev-chars '()])
+      (match chars
+        ['()
+         ;=>
+         (if (> (length rev-chars) 0)
+             (list (list->string (reverse rev-chars)))
+             (list))]
+        
+        [(cons (and hd (? is-sep?)) rest)
+         ;=>
+         (append
+          (if (> (length rev-chars) 0)
+              (list (list->string (reverse rev-chars)))
+              (list))
+          (if include-seps?
+              (cons (list->string (list hd))
+                    (chars->tokens rest))
+              (chars->tokens rest)))]
+
+        [(cons hd rest)
+         ;=>
+         (chars->tokens rest (cons hd rev-chars))]))
+
+    (chars->tokens (string->list str)))
+  
   
   (define (bibtex-tokenize exprs)
+
+    (define (sep? str)
+      (or (equal? str ",")
+          (equal? str "\\")
+          (andmap char-whitespace? (string->list str))))
+        
+    
+    (define (attach tokens)
+      ; re-attaches \ to subsequent token
+
+      (define (starts-with-slash? str)
+        (and (string? str) (string-starts-with str "\\")))
+      
+      (match tokens
+        ['() '()]
+
+        [`(,(and a (? string?)) ,(and b (? string?)) . ,rest)
+         #:when (and (not (sep? a)) (not (sep? b)))
+         (attach (cons (string-append a b)
+                       rest))]
+        
+        [`(,(and pre (? starts-with-slash?)) ,(and cmd (? string?)) . ,rest)
+         (cons (string-append "\\" cmd)
+               (attach rest))]
+
+        [(cons token rest)
+         (cons token
+               (attach rest))]))
+    
+    (define (tokenize s)
+      (string-tokenize s (set #\\ #\, #\space #\newline #\return #\tab) #t))
     
     (define (tokenize-parts expr)
       (match expr
         [(? string?)
-         #:when (andmap char-whitespace? (string->list expr))
-         '(" ")]
-        
-        [(? string?)
-         (define parts 
-           (add-between (regexp-split #rx"," expr) ","))
-         (apply append (for/list ([p parts]) 
-                         (filter (λ (s) (not (equal? s "")))
-                                 (add-between (regexp-split #rx"[ \t\r\n]+" p)
-                                              " "))))]
+         (tokenize expr)]
         
         [(? symbol?)
          '("")]
+
+        [`(quote ,(and str (? string?)))
+         (list `(quote ,(tokenize str)))]
         
-        [`(quote ,value)
-         (list expr)]
+        [`(quote ,lst)
+         (list `(quote ,(bibtex-tokenize lst)))]
       
         [else (error (format "could not tokenize name part ~v" expr))]))
     
-    (apply append (map tokenize-parts exprs)))
+    (attach (apply append (map tokenize-parts exprs))))
+
+
+  (define (bibtex-whitespace? expr)
+    (and (string? expr)
+         (andmap char-whitespace? (string->list expr))))
+  
+  (define (bibtex-not-whitespace? expr)
+    (not (bibtex-whitespace? expr)))
+  
+
+  (define (bibtex-lower-case? expr)
+    (or (and (list? expr)
+             (match expr
+               [`(quote ())        #t]
+               
+               [`(quote (quote ,expr))
+                (bibtex-lower-case? `(quote ,expr))]
+               
+               [`(quote ,(or (cons (and s (? string?)) _)
+                             (and s (? string?))))
+                (match (string->list s)
+                  [(cons #\\ _) #t]
+                  [else #f])]))
+        
+        (and (string? expr) 
+             (match (string->list expr)
+               ['() #f]
+               ['(#\,) #f]
+               [`(#\\ ,char . ,_)
+                (char-lower-case? char)]
+               [(cons char _) 
+                (char-lower-case? char)]))))
+  
+  (define (bibtex-not-lowercase? expr)
+      (not (bibtex-lower-case? expr)))
+  
+  (define (bibtex-upper-case? expr)
+    (or (and (list? expr)
+             (match expr
+               [`(quote ())        #t]
+                 
+               [`(quote (quote ,expr))
+                (bibtex-upper-case? `(quote ,expr))]
+               
+               [`(quote ,(or (cons (and s (? string?)) _)
+                             (and s (? string?))))
+                (match (string->list s)
+                  [(cons #\\ _) #f]
+                  [else #t])]))
+        
+        (and (string? expr) 
+             (match (string->list expr)
+               ['() #f]
+               ['(#\,) #f]
+               [`(#\\ ,char . ,_)
+                (char-upper-case? char)]
+               [(cons char _) 
+                (char-upper-case? char)]))))
   
   
-  (define (bibtex-split-tokens tokens pred)
+  (define (bibtex-tokens->words tokens)
+    ; return a list of words, where a list of words is a set of exprs
+    (match tokens
+      [(cons (? bibtex-whitespace?) _)
+       (define-values (white rest) (splitf-at tokens bibtex-whitespace?))
+       (bibtex-tokens->words rest)]
+
+      [(cons non-white _)
+       (define-values (word rest) (splitf-at tokens bibtex-not-whitespace?))
+       (cons word (bibtex-tokens->words rest))]
+
+      ['()
+       '()]))
+            
+      
+  (define (bibtex-split-tokens tokens pred?)
+    ; creates lists of tokens separated by `pred`
     
-    (define (not-pred x) (not (pred x)))
+    (define (not-pred? x) (not (pred? x)))
     
     (match tokens
       ['()
        '()]
         
-      [(list (? not-pred) ...)
+      [(list (? not-pred?) ...)
        (list tokens)]
       
-      [(list (and segment (? not-pred)) ... (? pred) rest ...)
-       (cons segment (bibtex-split-tokens rest pred))]))
-      
+      [(list (and segment (? not-pred?)) ... (? pred?) rest ...)
+       (cons segment (bibtex-split-tokens rest pred?))]))
+
+
+  ;  bibtex-trim trims whitespace at both ends
+  (define (bibtex-trim exprs)
+    
+    (define (trim-left lst)
+      (match lst
+        [(list (or "" ''() (? bibtex-whitespace?)) ... term ...)
+         term]))
+    
+    (trim-left (reverse (trim-left (reverse exprs)))))
+
   
   (define (bibtex-parse-name exprs)
     
     (define tokens (bibtex-tokenize exprs))
-    
-    (define (space? str)
-      (equal? str " "))
-    
+
     (define (comma? str)
       (equal? str ","))
-    
-    (define (not-space? str)
-      (not (space? str)))
-    
-    (define (von? str)
-      (or (and (list? str)
-               (match str
-                 [`(quote ,(and s (? string?)))
-                  (match (string->list s)
-                    [(cons #\\ _) #t]
-                    [else #f])]))
-                  
-          (and (string? str) 
-               (match (string->list str)
-                 ['() #f]
-                 ['(#\,) #f]
-                 [(cons char _) 
-                  (char-lower-case? char)]))))
-    
-    (define (not-von? str)
-      (not (von? str)))
-      
-    (define (trim-start lst)
-      (match lst
-        [(list (? space?) ... term ...)
-         term]))
-    
-    (define (trim lst)
-      (trim-start (reverse (trim-start (reverse lst)))))
-    
-    (define (parse-von-last parts)
-      (match (reverse parts)
-        ; Last Name
-        [(list (? not-von?) ...)
-         (list '() parts)]
+
+    (define (name? word)
+      (and (not (null? word)) (bibtex-upper-case? (car word))))
+
+    (define (von? word)
+      (and (not (null? word)) (bibtex-lower-case? (car word))))
+
+    ; $ : word list -> token list
+    (define ($ words)
+      (apply append (add-between words '(" "))))
+
+    (define (parse-von-last tokens)
+      (match (bibtex-tokens->words tokens)
         
-        ; [von] last
-        [(list (? space?) ... 
-               (and rev-last2 (? not-space?)) ...
-               (and rev-last1 (? von?)) ... 
-               (? space?) ...
-               (and rev-von (? not-space?)) ...)
-         (list (reverse rev-von) (append (reverse rev-last2) (reverse rev-last1)))]
-        
-        ; von Last 
-        [(list (and rev-last (? not-von?)) ..1 rev-von ...)
-         (list (reverse rev-von) (reverse rev-last))]))
-         
+        ; Last | last
+        [(list word)
+         (list '() word)]
+
+        ; last ...
+        [(list (? von?) ...)
+         (list '() tokens)]
+
+        ; von ... Last ...
+        [(list (? von? vons) ... (? name? lasts) ..1)
+         (list ($ vons) ($ lasts))]
+
+        ; von ... stuff ... last
+        [(list (? von? von-start) vons-middle ... (? von? last))
+         (list ($ `(,von-start ,@vons-middle)) last)]
+
+        ; von stuff ... von Last ...
+        [(list (? name? firsts) ...
+               (? von? von-start)
+               vons-middle ...
+               (? von? von-end)
+               (? name? lasts) ..1)
+         (list ($ `(,von-start ,@vons-middle ,von-end)) ($ lasts))]))
+
+
+    (define (parse-first-von-last tokens)
+      (match (bibtex-tokens->words tokens)
+
+        ; Last | last
+        [(list word)
+         (list '() '() word '())]
+
+        ; last ...
+        [(list (? von?) ...)
+         (list '() '() tokens '())]
+
+        ; First ... Last | First ... last
+        [(list (? name? firsts) ... last)
+         (list ($ firsts) '() last '())]
+
+        ; First ... von ... Last ...
+        [(list (? name? firsts) ... (? von? vons) ... (? name? lasts) ..1)
+         (list ($ firsts) ($ vons) ($ lasts) '())]
+
+        ; First ... von ... stuff ... last
+        [(list (? name? firsts) ... (? von? von-start) vons-middle ... (? von? last))
+         (list ($ firsts) ($ `(,von-start ,@vons-middle)) last '())]
+
+        ; First ... von stuff ... von Last ...
+        [(list (? name? firsts) ...
+               (? von? von-start)
+               vons-middle ...
+               (? von? von-end)
+               (? name? lasts) ..1)
+         (list ($ firsts) ($ `(,von-start ,@vons-middle ,von-end)) ($ lasts) '())]))
     
-    (define (parse-first-von-last parts)
-      (match (trim parts)
-        
-        ; Last
-        [(list (? space?) ... 
-               (and last (? not-space?)) ...
-               (? space?) ...)
-         `(() () ,last ())]
-               
-        
-        ; First von Last
-        [(list (and first-name (? not-von?)) ... von-last ..1)
-         `(,first-name ,@(parse-von-last von-last) ())]))
-      
     
     (define parsed 
       (match (bibtex-split-tokens tokens comma?)
@@ -399,7 +556,7 @@
         
         [else tokens]))
     
-    (match (map trim parsed)
+    (match (map bibtex-trim parsed)
       [`(,first ,von ,last ,jr)
        `(name
          (first . ,first)

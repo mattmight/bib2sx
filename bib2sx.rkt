@@ -24,6 +24,8 @@
 
 ; TODO:
 
+; + Add --tokenize flag to tokenize into strings meaningful to BibTeX/LaTeX:
+;     $, \<cmd>, <whitespace>, <word>
 ; + Add flag to choose name fields (currently author, editor)
 ; + Add support for @comment and @preamble
 
@@ -77,7 +79,7 @@
      (void)]
     
     [(cons "--drracket" rest)
-     (set! bibtex-input-port (open-input-file "mattmight.bib"))
+     (set! bibtex-input-port (open-input-file "test/test.bib"))
      (parse-options! rest)]
     
     ; choose the input format:
