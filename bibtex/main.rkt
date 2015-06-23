@@ -195,29 +195,32 @@
       [(cons hd tl)
        (cons hd (flatten-top-level-quotes tl))]))
   
-  ; simplify-quotes : expr* -> expr*
-  (define (simplify-quotes exprs)
+  ; bibtex-simplify-quotes : expr* -> expr*
+  (define (bibtex-simplify-quotes exprs)
     ; concatenates and simplifies where possible
     (match exprs
       ['()
        '()]
-      
-      [`(',substring . ,tl)
-       (define reduced (simplify-quotes substring))
+
+      [`((quote ,(? string? substring)) . ,tl)
+       `((quote ,substring) . ,(bibtex-simplify-quotes tl))]
+       
+      [`((quote ,sub-exprs) . ,tl)
+       (define reduced (bibtex-simplify-quotes sub-exprs))
        (when (and (list? reduced) (= (length reduced) 1))
          (set! reduced (car reduced)))
        (cons `(quote ,reduced)
-             (simplify-quotes tl))]
+             (bibtex-simplify-quotes tl))]
       
       [`(,(and a (? string?)) ,(and b (? string?)) . ,rest)
-       (simplify-quotes (cons (string-append a b) rest))]
+       (bibtex-simplify-quotes (cons (string-append a b) rest))]
       
       [(cons hd tl)
-       (cons hd (simplify-quotes tl))]))
+       (cons hd (bibtex-simplify-quotes tl))]))
   
   ; flatten+simplify : expr* -> expr*
   (define (flatten+simplify exprs)
-    (simplify-quotes (flatten-top-level-quotes exprs)))
+    (bibtex-simplify-quotes (flatten-top-level-quotes exprs)))
   
   ; helpers:
   (define (symbol-downcase s)
@@ -313,58 +316,73 @@
 
     (chars->tokens (string->list str)))
   
-  
-  (define (bibtex-tokenize exprs)
+  (define-lex-abbrev blank-lines
+    (:: (:* (char-set " \tr")) "\n" (:* (char-set "  \t\r")) "\n" (:* whitespace)))
 
-    (define (sep? str)
-      (or (equal? str ",")
-          (equal? str "\\")
-          (andmap char-whitespace? (string->list str))))
-        
+  (define-lex-abbrev end-of-line
+    (:: (:* (char-set " \tr")) "\n" (:* (char-set "  \t\r"))))
     
-    (define (attach tokens)
-      ; re-attaches \ to subsequent token
+  (define (bibtex-texenize exprs #:collapse-whitespace [collapse? #t])
 
-      (define (starts-with-slash? str)
-        (and (string? str) (string-starts-with str "\\")))
-      
-      (match tokens
-        ['() '()]
+    ; first condense:
+    (define condensed-exprs (bibtex-simplify-quotes exprs))
 
-        [`(,(and a (? string?)) ,(and b (? string?)) . ,rest)
-         #:when (and (not (sep? a)) (not (sep? b)))
-         (attach (cons (string-append a b)
-                       rest))]
-        
-        [`(,(and pre (? starts-with-slash?)) ,(and cmd (? string?)) . ,rest)
-         (cons (string-append "\\" cmd)
-               (attach rest))]
+    ; then lex:
+    (define tex-lexer
+      (lexer
+       [(:: "\\" (:+ alphabetic))
+        ;=>
+        (cons lexeme (tex-lexer input-port))]
 
-        [(cons token rest)
-         (cons token
-               (attach rest))]))
-    
-    (define (tokenize s)
-      (string-tokenize s (set #\\ #\, #\space #\newline #\return #\tab) #t))
-    
-    (define (tokenize-parts expr)
+       [(:: "\\" any-char)
+        ;=>
+        (cons lexeme (tex-lexer input-port))]
+
+       [end-of-line
+        ;=>
+        (if collapse?
+            (cons " " (tex-lexer input-port))
+            (cons lexeme (tex-lexer input-port)))]
+
+       [blank-lines
+        ;=>
+        (if collapse?
+            (cons "\n\n" (tex-lexer input-port))
+            (cons lexeme (tex-lexer input-port)))]
+
+       [(:* (char-set " \t"))
+        ;=>
+        (if collapse?
+            (cons " " (tex-lexer input-port))
+            (cons lexeme (tex-lexer input-port)))]
+
+       [any-char
+        ;=>
+        (cons lexeme (tex-lexer input-port))]
+
+       [(eof)
+        ;=>
+        '()]))
+
+    (define (texinize expr)
       (match expr
         [(? string?)
-         (tokenize expr)]
-        
+         (tex-lexer (open-input-string expr))]
+
         [(? symbol?)
-         '("")]
+         (error (format "BibTeX symbols [~v] cannot be TeXinized; inline first" expr))]
 
-        [`(quote ,(and str (? string?)))
-         (list `(quote ,(tokenize str)))]
-        
-        [`(quote ,lst)
-         (list `(quote ,(bibtex-tokenize lst)))]
-      
-        [else (error (format "could not tokenize name part ~v" expr))]))
+        [`(quote ,(? string? str))
+         (list `(quote ,(texinize str)))]
+
+        [`(quote (quote ,inner-exprs))
+         (list `(quote ,(texinize `(quote ,inner-exprs))))]
+
+        [`(quote ,(? list? exprs))
+         (list `(quote ,(apply append (map texinize exprs))))]))
     
-    (attach (apply append (map tokenize-parts exprs))))
-
+    (apply append (map texinize condensed-exprs)))
+       
 
   (define (bibtex-whitespace? expr)
     (and (string? expr)
@@ -440,7 +458,7 @@
             
       
   (define (bibtex-split-tokens tokens pred?)
-    ; creates lists of tokens separated by `pred`
+    ; creates lists of tokens separated by `pred?`
     
     (define (not-pred? x) (not (pred? x)))
     
@@ -468,7 +486,7 @@
   
   (define (bibtex-parse-name exprs)
     
-    (define tokens (bibtex-tokenize exprs))
+    (define tokens (bibtex-texenize exprs))
 
     (define (comma? str)
       (equal? str ","))
@@ -564,9 +582,22 @@
          (last . ,last)
          (jr . ,jr))]))
        
-  
+
   
   (define (bibtex-parse-names item [name-fields (set 'author 'editor)])
+
+    (define (split-ands toks [rev-cur '()] [rev-all '()])
+      (match toks
+        ['()
+         (reverse (cons (reverse rev-cur) rev-all))]
+
+        [(or `("a" "n" "d" . ,rest)
+             (cons "and" rest))
+         (split-ands rest '() (cons (reverse rev-cur) rev-all))]
+
+        [(cons hd tl)
+         (split-ands tl (cons hd rev-cur) rev-all)]))
+    
     (match item
       [`(,item-type 
          ,key
@@ -579,8 +610,8 @@
              (if (set-member? name-fields n)
                  (let ()
                    (define (is-and? expr) (equal? expr "and"))
-                   (define toks (bibtex-tokenize e))
-                   (define all-names (bibtex-split-tokens toks is-and?))
+                   (define toks (bibtex-texenize e))
+                   (define all-names (split-ands toks)) 
                    (cons n (map bibtex-parse-name all-names)))
                  (cons n e))))]))
             
