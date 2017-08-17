@@ -889,7 +889,8 @@
        (string-append
         "{" 
         (string-join entries ",\n " #:before-first " " #:after-last ",\n ")
-        "\"bibtexKey\": " (escape key)
+        "\"bibtexKey\": " (escape key) ",\n "
+        "\"itemType\": " (escape item-type)
         " }")]))
   
   
