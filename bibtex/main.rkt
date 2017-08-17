@@ -849,7 +849,6 @@
       (set! str (string-replace str "\n" "\\n"))
       (set! str (string-replace str "\t" "\\t"))
       (set! str (string-replace str "\"" "\\\""))
-      (set! str (string-replace str "\'" "\\\'"))
       (string-append "\"" str "\""))
     
     (define (expr->json expr)
