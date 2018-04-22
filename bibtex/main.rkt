@@ -849,7 +849,6 @@
       (set! str (string-replace str "\n" "\\n"))
       (set! str (string-replace str "\t" "\\t"))
       (set! str (string-replace str "\"" "\\\""))
-      (set! str (string-replace str "\'" "\\\'"))
       (string-append "\"" str "\""))
     
     (define (expr->json expr)
@@ -858,11 +857,11 @@
          (escape (car (hash-ref bibtex-default-strings expr (λ () (list "")))))]
         
         [`(name (first . ,first) (von . ,von) (last . ,last) (jr . ,jr))
-         (string-append "{first: [" (string-join (map expr->json first) ",") "],"
-                        "von: [" (string-join (map expr->json von) ",") "],"
-                        "last: [" (string-join (map expr->json last) ",") "],"
-                        "jr: [" (string-join (map expr->json jr) ",") "]}")]
-        
+         (string-append "{" (escape "first") ": [" (string-join (map expr->json first) ",") "],"
+                            (escape "von")   ": [" (string-join (map expr->json von)   ",") "],"
+                            (escape "last")  ": [" (string-join (map expr->json last)  ",") "],"
+                            (escape "jr")    ": [" (string-join (map expr->json jr)    ",") "]}")]
+
         [`(quote (,exprs ...))
          (string-append "[" (string-join (map expr->json exprs) ", ") "]")]
         
@@ -890,7 +889,8 @@
        (string-append
         "{" 
         (string-join entries ",\n " #:before-first " " #:after-last ",\n ")
-        "\"bibtexKey\": " (escape key)
+        "\"bibtexKey\": " (escape key) ",\n "
+        "\"itemType\": " (escape item-type)
         " }")]))
   
   
