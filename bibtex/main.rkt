@@ -382,7 +382,7 @@
          (list `(name (first . ,(bibtex-texenize first))
                       (von . ,(bibtex-texenize von))
                       (last . ,(bibtex-texenize last))
-                      (jr . ,(bibtex-texenize last))))]
+                      (jr . ,(bibtex-texenize jr))))]
 
         [`(quote ,(? string? str))
          (list `(quote ,(texinize str)))]
